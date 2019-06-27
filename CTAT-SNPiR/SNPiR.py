@@ -818,23 +818,82 @@ def step_9(outdir, vadir, infile):
 # MAIN: run the steps 
 ##############################################################################
 ##############################################################################
-def main():
-    infile = "/seq/RNASEQ/mbrown/test.vcf"
-    outdir = "/seq/RNASEQ/mbrown"
-    # infile = "/seq/RNASEQ/mbrown/CTAT/Mutations/SNPiR/variants.vcf"
-    # outdir = "/seq/RNASEQ/mbrown/CTAT/Mutations/SNPiR"
-    vadir = "/seq/RNASEQ/mbrown/CTAT/VaDiR/VaDiR/VaDiR"
-    quality_filter = 20
-    ID = "SRR5665260"
-    # refined_bam =  "{}/refined-mapping/{}.refined.bam".format(outdir, ID)
-    refined_bam =  "/seq/RNASEQ/mbrown/CTAT/VaDiR/VaDiR/GIAB_DATA/refined-mapping/SRR5665260.refined.bam"
 
-    # step_2(outdir, infile, quality_filter)
-    # step_3(outdir, vadir, refined_bam)
-    # step_4(outdir, vadir)
-    # step_5(outdir, vadir)
-    # step_6(outdir, vadir)
-    # step_7(outdir, vadir, threads=8, bamFile = refined_bam)
+def make_menu():
+    ###########################################
+    # Gather the arguments passed to the SNPiR script in comand line 
+    ###########################################
+
+    ## Input Arguments
+    # Description 
+    args_parser = argparse.ArgumentParser(
+        description = "Run SNPiR steps."
+        )
+    #---------------------
+    ## Required arguments
+    #---------------------
+    required = args_parser.add_argument_group('required arguments')
+
+    required.add_argument( "-I", metavar = "Input_File", dest = "str_input_file",
+                           required = True, help = "The input VCF file to run SNPiR on.")
+    required.add_argument( "-B", metavar = "Input_BAM_File", dest = "str_BAM_file",
+                           required = True, help = "The input BAM file.")
+    required.add_argument( "-V", metavar = "VaDiR_ Directory", dest = "str_VaDiR_path",
+                           required = True, help = "The path to the VaDiR directory.")
+    
+    required.add_argument( "-O", metavar = "Output_Directory", dest = "str_out_dir",
+                           required = False, help = "Where to put the results from SNPiR.",
+                           default = ".")
+    #---------------------
+    ## Optional arguments
+    #---------------------
+    optional = args_parser.add_argument_group('optional arguments')
+
+    optional.add_argument("--threads", metavar = "Process_threads", dest = "i_number_threads",
+                          type = int, default = 1, help = "The number of threads to use for multi-threaded steps.")
+
+    return args_parser
+
+if __name__ == "__main__":
+
+    # Parse the arguments given to SNPiR
+    args_parser = make_menu()
+    args_parsed = args_parser.parse_args()
+
+    if args_parsed.debug:
+        logger.setLevel(logging.DEBUG)
+    
+
+
+    ###################
+    # Set Constants
+    ###################
+
+    quality_filter = 20
+    infile = args_parsed.str_input_file
+    outdir = args_parsed.str_out_dir
+    vadir = args_parsed.str_VaDiR_path
+    refined_bam = args_parsed.str_BAM_file
+
+    # Get the output directory and create it if it does not exist
+    if not os.path.exists(outdir):
+        os.mkdir(outdir)
+
+
+    ## Make Checkpoints directory
+    # checkpoints_dir_path = os.path.join(outdir, "chckpts_dir")
+    # checkpoints_dir = os.path.abspath(checkpoints_dir_path)
+    # if not os.path.exists(checkpoints_dir):
+    #     os.makedirs(checkpoints_dir)
+
+
+
+    step_2(outdir, infile, quality_filter)
+    step_3(outdir, vadir, refined_bam)
+    step_4(outdir, vadir)
+    step_5(outdir, vadir)
+    step_6(outdir, vadir)
+    step_7(outdir, vadir, threads=8, bamFile = refined_bam)
     step_8(outdir, vadir)
     step_9(outdir, vadir, infile)
 
