@@ -1,10 +1,18 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+from __future__ import (absolute_import, division,
+                        print_function, unicode_literals)
 
 import argparse
-import sys, os, re
+import datetime
+import os,sys,re
+import ntpath
+import json
+import glob
+import urllib.request
 import logging
 import subprocess
-import csv
 logging.basicConfig(format='\n %(levelname)s : %(message)s', level=logging.DEBUG)
 
 
@@ -13,13 +21,16 @@ logging.basicConfig(format='\n %(levelname)s : %(message)s', level=logging.DEBUG
 ##########################
 # Read the vcf inputs
 ##########################
+# Take a VCF file as input, separate the head from the variant rows 
+# and return them in lists
+#   Input  : VCF 
+#   output : Head and variants as lists
 def readVCF(infile, STR_VCF_DELIMITER, CHR_COMMENT):
     vcf_header = []
     vcf_body = []
     vcf_file = open(infile, "r").readlines()
 
     for line in vcf_file:
-        # Keep comments
         ## Header 
         if line[0][0] == CHR_COMMENT:
             vcf_header.append(line)
@@ -27,7 +38,6 @@ def readVCF(infile, STR_VCF_DELIMITER, CHR_COMMENT):
         ## Variants
         else:
             vcf_body.append(line)
-            
     return vcf_header, vcf_body
 
       ##############################################
@@ -36,34 +46,46 @@ def readVCF(infile, STR_VCF_DELIMITER, CHR_COMMENT):
 ############################################################
       ##############################################
 def step_2(outdir, infile, quality_filter):
+    ###################################################################
+    # Convert the input VCF file to a custom format for SNPiR. 
+    #   Preforms hard filtering. 
+    #    1) Variant call quality greater than 20 
+    #    2) AD: Total Read Depth for each allele Per-sample 
+    #       GT: Genotype, encoded as allele values separated by a "/"
+    #               diploid call 0/1
+    #               triploid call 1/1
+    ###################################################################
     
     logging.info("SNPiR - Step 2: Converting VCF to custom SNPiR format & filtering out variants with quality < 20")
 
     ##############
-    # Constatnts #
+    # Constants #
     ##############
     VCF_DELIMITER = "\t"
     CHR_COMMENT = "#"
-
     # keep track of which lines are removed 
     removed=[]
     # output file
     outputFile = "{}/step2.txt".format(outdir)
+    outputFailed = "{}/step2_failed.txt".format(outdir)
+    # counters to see how many variants pass and fail 
+    passed, failed = 0, 0
+
     ################
     # Read in files 
     ################
     head, body = readVCF(infile, VCF_DELIMITER, CHR_COMMENT)
 
-    # counters to see how many variants pass and fail 
-    passed, failed = 0, 0
-
+    # open the output file 
     outputFile = open(outputFile, "w")
     for i in range(len(body)):
         line = body[i].split("\t")
 
-        # filter quality 
+        # Filter quality is at least 20 
         if float(line[5]) >= quality_filter:
             # if GT and AD depths
+            # Format ex:
+            #   GT:AD   0/1:28,2
             if re.search(r'[GT:AD]',line[8]):
                 tmp = line[9].split(":")
                 alleleDepth = tmp[1].split(",")
@@ -93,6 +115,11 @@ def step_2(outdir, infile, quality_filter):
         failed = len(removed)
     outputFile.close()
 
+    print(removed)
+    for i in removed:
+        outputFailed.write(removed)
+    outputFailed.close()
+
     print("Variants kept:", passed)
     print("Variants filtered:", failed)
 
@@ -102,6 +129,9 @@ def step_2(outdir, infile, quality_filter):
 ############################################################
       ##############################################
 def step_3(outdir, vadir, bamFile):
+    ###################################################################
+    # Filter out the mismatches with occur within the first 6 bases of a read. 
+    ###################################################################
     
     logging.info("SNPiR - STEP 3: Filtering out mismatches in first 6 bp of reads")
 
@@ -118,10 +148,10 @@ def step_3(outdir, vadir, bamFile):
 
     TEMP = step3_outfile + '_tmp'
 
+    # Open input and output Files 
     infile = open(step3_file, "r")
     outfile = open(step3_outfile , "w")
     outfile_failed = open (outfile_failed, "w")
-
 
     # counters 
     not_filtered, removed= 0, 0
@@ -129,7 +159,7 @@ def step_3(outdir, vadir, bamFile):
     for i in infile.readlines():
         line = i.split("\t")
         chrom, position = line[0], line[1]
-        bamposition = chrom + ':' + position+'-'+position
+        bamposition = chrom + ':' + position + '-' + position
 
         cmd = "samtools view {} {} > {}".format(bamFile, bamposition, TEMP)
         subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
@@ -851,6 +881,7 @@ def make_menu():
 
     optional.add_argument("--threads", metavar = "Process_threads", dest = "i_number_threads",
                           type = int, default = 1, help = "The number of threads to use for multi-threaded steps.")
+    optional.add_argument("--debug", action="store_true", help="sets debug mode for logger")
 
     return args_parser
 
@@ -896,5 +927,3 @@ if __name__ == "__main__":
     step_7(outdir, vadir, threads=8, bamFile = refined_bam)
     step_8(outdir, vadir)
     step_9(outdir, vadir, infile)
-
-main()
