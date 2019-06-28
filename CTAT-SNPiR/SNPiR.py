@@ -66,8 +66,8 @@ def step_2(outdir, infile, quality_filter):
     # keep track of which lines are removed 
     removed=[]
     # output file
-    outputFile = "{}/step2.txt".format(outdir)
-    outputFailed = "{}/step2_failed.txt".format(outdir)
+    outputFile_path = "{}/step2.txt".format(outdir)
+    outputFailed_path = "{}/step2_failed.txt".format(outdir)
     # counters to see how many variants pass and fail 
     passed, failed = 0, 0
 
@@ -77,7 +77,8 @@ def step_2(outdir, infile, quality_filter):
     head, body = readVCF(infile, VCF_DELIMITER, CHR_COMMENT)
 
     # open the output file 
-    outputFile = open(outputFile, "w")
+    outputFile = open(outputFile_path, "w")
+    outputFailed = open(outputFailed_path, "w")
     for i in range(len(body)):
         line = body[i].split("\t")
 
@@ -102,25 +103,26 @@ def step_2(outdir, infile, quality_filter):
                     newLine_list=[line[0], line[1], depths, line[3], line[4], altFraction]
                     newLine = "\t".join(newLine_list)
 
+                    #Write the variants that passed to a new file 
                     outputFile.write(newLine+"\n")
 
                     passed += 1
 
                 else:
-                    removed.append(i)
+                    removed.append(body[i])
             else:
-                removed.append(i)
+                removed.append(body[i])
         else:
-            removed.append(i)
+            removed.append(body[i])
         failed = len(removed)
     outputFile.close()
 
-    print(removed)
+    # Write the failed variants to a separate file 
     for i in removed:
-        outputFailed.write(removed)
+        outputFailed.write(i)
     outputFailed.close()
 
-    print("Variants kept:", passed)
+    print("Variants Passed:", passed)
     print("Variants filtered:", failed)
 
       ##############################################
@@ -130,7 +132,9 @@ def step_2(outdir, infile, quality_filter):
       ##############################################
 def step_3(outdir, vadir, bamFile):
     ###################################################################
-    # Filter out the mismatches with occur within the first 6 bases of a read. 
+    # Preform hard filtering based on variant location on the read and base quality score 
+    #   1) Filter out the mismatches that occur within the first 6 bases of a read. 
+    #   2) Filtering variants that are below the minimal base quality score of 25
     ###################################################################
     
     logging.info("SNPiR - STEP 3: Filtering out mismatches in first 6 bp of reads")
@@ -140,7 +144,7 @@ def step_3(outdir, vadir, bamFile):
     ##############
     quality_offset = 33
     minimal_base_quality = 25
-    minmismatch = 1
+    minimum_mismatch = 1
     
     step3_file = "{}/step2.txt".format(outdir)
     step3_outfile = "{}/step3.txt".format(outdir)
@@ -173,13 +177,13 @@ def step_3(outdir, vadir, bamFile):
         for j in f.readlines():
             bamfields = j.strip().split("\t")
             alignment, readstart, cigar, sequence, qualities = bamfields[1], bamfields[3], bamfields[5], bamfields[9], bamfields[10]
-            sequencebases = sequence#.split("//")
-            qualscores = qualities#.split(":")[-1]
+            sequencebases = sequence
+            qualscores = qualities
 
             currentpos, readpos = int(readstart), 1
             base_readpos = []
             
-            # leters 
+            # letters 
             cigarletters = re.findall(r'[MIDNSHP=X]',cigar)
             # numbers
             cigarnums = re.split('[MIDNSHP]', cigar)
@@ -190,7 +194,6 @@ def step_3(outdir, vadir, bamFile):
                 if currentpos > position:
                     break
                 if cigarletters[k] == "I" or cigarletters[k] == "S":
-                # if cigarletters[i] =~ m/[SI]/) {
                     readpos = readpos + int(cigarnums[k])
 
                 elif cigarletters[k] == "D" or cigarletters[k] == "N": 
@@ -204,32 +207,37 @@ def step_3(outdir, vadir, bamFile):
                         readpos += 1
             
             if base_readpos:
+                #----------------------------------------------------
+                # Check if the alignment is a reverse strand by looking at the SAM Flags
+                #----------------------------------------------------
                 # set the reverse indicator to 0
                 revers_strand = 0 
+                # Alignment is the SAM Flags
                 # revers_strand = 1 if (alignment & 16)
                 # check the SAM lag, (1000 means this is a revers strand)
                 a = bin(int(alignment))
                 rev_test = a[-5]
                 if len(a) >= 5 and int(rev_test) == 1:
                     revers_strand = 1
+                #----------------------------------------------------
+                # check is within 6 bases of the ends and quality score 
+                #----------------------------------------------------
+                # If the base position is within the 6 base pairs of either side of the sequence -> Pass
                 if (revers_strand == 0 and int(base_readpos) > 6) or (revers_strand == 1 and base_readpos < readpos - 5):
+                    # If quality score is greater than or equal to the cutoff 
                     if ord(str(qualscores)[base_readpos-1]) >= minimal_base_quality + quality_offset:
                         newcov += 1
                         if (sequencebases[base_readpos-1] == editnuc):
                             newmismatch+=1
-                        else:
-                            basequalFail=1
                     else:
-                        readPosFail=1
-
-        # remove the temp file 
-        # cmd = "rm {}".format(TEMP)
-        # subprocess.Popen(cmd, shell=True)
+                        basequalFail=1
+                else:
+                    readPosFail=1
 
         #-----------------------
         # output lines 
         #-----------------------
-        if newmismatch >= minmismatch: 
+        if newmismatch >= minimum_mismatch: 
             not_filtered += 1
             varfreq = (newmismatch/newcov)
             new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + str(varfreq)+"\n")
@@ -237,18 +245,18 @@ def step_3(outdir, vadir, bamFile):
         #-----------------------
         # output removed/filtered lines 
         #-----------------------
-        if newmismatch < minmismatch:
+        if newmismatch < minimum_mismatch:
             removed += 1
             if basequalFail:
-                reason = ' low basequal;'
+                reason = ' low base quality;'
             if readPosFail:
-                reason = ' mismatch at readend;'
+                reason = ' mismatch at read end;'
             
             new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + "NAN\treason:"+reason + "\n")
             outfile_failed.write(new_output_line)
 
     # report how many removed and remained 
-    info_message = "Variants removed: {} \n Varirants Remaining: {}".format(removed, not_filtered)
+    info_message = "Variants filtered: {} \n Variants Passed: {}".format(removed, not_filtered)
     logging.info(info_message)
 
     infile.close()
@@ -262,15 +270,20 @@ def step_3(outdir, vadir, bamFile):
       ##############################################
 
 def step_4(outdir, vadir):
+    ###################################################################
+    # Remove sites in repetitive regions based on RepeatMasker annotation
+    #    Using BEDtools subtract to compare the variants to the RepeatMasker dataset 
+    #    RepeatMasker is "detailed annotation of the repeats that are present in the query sequence" 
+    #    RepeatMasker is provided by UCSC Genome Browser 
+    ###################################################################
     
     logging.info("\n STEP 4: \n Using BEDtools subtract to remove sites in repetitive regions based on RepeatMasker annotation")
 
-    ##############
-    # Constatnts #
-    ##############
+    #############
+    # Constants #
+    #############
     ## Store the vcf in list 
     new_vcf = []
-    
     # String to write lines to 
     temp=""
 
@@ -279,22 +292,21 @@ def step_4(outdir, vadir):
     ################
     step4_output_path = "{}/step4.txt".format(outdir)
     step4_infile = "{}/step3.txt".format(outdir)
+    vcf_file = open(step4_infile, "r")
     # repeat masker bed file 
     bed_path = '{}/tools/SNPiR/genome_ref/hg19_rmsk.bed'.format(vadir)
-
-    vcf_file = open(step4_infile, "r")
     bed_file = open(bed_path, "r")
     
-    # loop over the vcf file variants 
+    # loop over the VCF file variants 
+    # add Start location
     for i in vcf_file.readlines():
         line = i.split("\t")
         start_location = int(line[1])-1
         line.insert(1, str(start_location))
         new_vcf.append("\t".join(line))
     temp = "".join(new_vcf)
-    # print(temp)
     
-    # temp is the stdin
+    # Pass temp variable as the stdin
     # Use bedtools subtract to remove variations found in rmsk.bed file 
     cmd = "bedtools subtract -a stdin -b {}/tools/SNPiR/genome_ref/hg19_rmsk.bed | cut -f1,3-7 > {}".format(vadir, step4_output_path)
     print(cmd)
@@ -317,15 +329,18 @@ def intron_splice_region(variant_pos, variant_genes, splice_dist):
     # For each variant, 
     #    1) loop through its chromosome's gene annotations
     #    2) & check if variant is in intronic region near a splice junction
+    # variant_genes are the lines from the Gene Annotation file. 
     ###################################################################
+
+    # Loop over all the present variants 
     for i in variant_genes:
         gene_start = int(i[4])
         gene_end = int(i[5])
         if variant_pos < gene_start:
             break
         
-        # falls in the region 
-            ## if if in the gene
+        # Falls in the region 
+        # If the variant is within the gene region
         if gene_start <= variant_pos and variant_pos <= gene_end:
             exon_count = int(i[8])
             exon_starts = i[9].split(",")
@@ -334,17 +349,18 @@ def intron_splice_region(variant_pos, variant_genes, splice_dist):
             # For each exon, check if falls within 4 bp of the start or end 
             for j in range(exon_count):
 
-                # Does the variant fall in the intronic reagon 
+                # Does the variant fall in the intronic region 
                 exon_start = int(exon_starts[j])
                 start_intronic_offset = exon_start - splice_dist
-                ## if the position of the variant is not in the intronic reagon, then break 
+
+                # If the position of the variant is not in the intronic region, then break 
                 if variant_pos < start_intronic_offset:
                     break
 
                 exon_end = int(exon_ends[j])
                 end_intronic_offset = exon_end + splice_dist
 
-                # Is the variant within the first splice_distance bp's of the START of the exon 
+                # Is the variant is within the first splice_distance bp's of the START of the exon 
                 start_intron_region = start_intronic_offset < variant_pos and variant_pos <= exon_start
                 # Is the variant within the first splice_distance bp's of the END of the exon
                 end_intron_region = exon_end < variant_pos and variant_pos <= end_intronic_offset
@@ -352,10 +368,13 @@ def intron_splice_region(variant_pos, variant_genes, splice_dist):
                 # If the variant is found to fall within the splice_distance bp's of the start or end of the exon region 
                 if start_intron_region or end_intron_region:
                     return(True)
-
     return(False)
 
 def step_5(outdir, vadir):
+    ###################################################################
+    # Filtering intronic candidates within 4 bp of splicing junctions
+    # 
+    ###################################################################
 
     logging.info("\n STEP 5: \n Filtering intronic candidates within 4 bp of splicing junctions")
 
@@ -366,7 +385,6 @@ def step_5(outdir, vadir):
     # set file paths 
     step5_outfile = "{}/step5.txt".format(outdir)
     step5_infile = "{}/step4.txt".format(outdir)
-
     genefile_path = "{}/tools/SNPiR/revised/gene_annotation_table".format(vadir)
 
     # Open Files Read and Write
@@ -383,30 +401,30 @@ def step_5(outdir, vadir):
     passed, failed = 0, 0
 
 
-    ##############################################
-    # create dictionary that holds the chromosome 
-    # and the line from gene annotations table 
-    ##############################################
+    ###############################################
+    # create dictionary that holds the chromosome as the KEY 
+    # and the line from gene annotations table as the VALUE
+    ###############################################
     dic = {}
-
-    # loop over gene file
+    # loop over Gene Annotation File
     for i in genefile.readlines():
         x = i.rstrip('\n').split("\t")
-        gene_chrom = x[2]
-        if gene_chrom in dic:
-            dic[gene_chrom].append(x)
+        chromosome = x[2]
+        if chromosome in dic:
+            dic[chromosome].append(x)
         else: 
-            dic.setdefault(gene_chrom, []).append(x)
+            dic.setdefault(chromosome, []).append(x)
 
-    # loop over infile 
+    # loop over the variants 
     variant_chrom_genes_ref=[]
     for i in infile.readlines():
         x = i.rstrip('\n').split("\t")
-        chrom = x[0]
-        pos = int(x[1])
-        variant_chrom_genes_ref = dic[chrom]
+        chromosome = x[0]
+        position = int(x[1])
+        # get all the lines for that chromosome in the gene annotation file dictionary 
+        variant_chrom_genes_ref = dic[chromosome]
 
-        if intron_splice_region(pos, variant_chrom_genes_ref, splice_dist) == True:
+        if intron_splice_region(position, variant_chrom_genes_ref, splice_dist) == True:
             outfile_failed.write(i)
             failed += 1
         else:
@@ -418,8 +436,8 @@ def step_5(outdir, vadir):
     infile.close()
     genefile.close()
 
-    print("Variants kept:", passed)
-    print("Variants filtered:", failed)
+    print("Variants Passed:", passed)
+    print("Variants Filtered:", failed)
 
 
       ##############################################
@@ -527,8 +545,8 @@ def step_6(outdir, vadir):
     infile.close()
     refgenome.close()
 
-    print("Variants kept: ", passed)
-    print("Variants filtered: ", failed)
+    print("Variants Passed: ", passed)
+    print("Variants Filtered: ", failed)
 
 
       ##############################################
@@ -919,11 +937,11 @@ if __name__ == "__main__":
 
 
 
-    step_2(outdir, infile, quality_filter)
-    step_3(outdir, vadir, refined_bam)
+    # step_2(outdir, infile, quality_filter)
+    # step_3(outdir, vadir, refined_bam)
     step_4(outdir, vadir)
     step_5(outdir, vadir)
-    step_6(outdir, vadir)
-    step_7(outdir, vadir, threads=8, bamFile = refined_bam)
-    step_8(outdir, vadir)
-    step_9(outdir, vadir, infile)
+    # step_6(outdir, vadir)
+    # step_7(outdir, vadir, threads=8, bamFile = refined_bam)
+    # step_8(outdir, vadir)
+    # step_9(outdir, vadir, infile)
