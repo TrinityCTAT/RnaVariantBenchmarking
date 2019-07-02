@@ -13,6 +13,7 @@ import glob
 import urllib.request
 import logging
 import subprocess
+import multiprocessing as mp
 logging.basicConfig(format='\n %(levelname)s : %(message)s', level=logging.DEBUG)
 
 
@@ -130,6 +131,125 @@ def step_2(outdir, infile, quality_filter):
 ########################## Step 3 ##########################
 ############################################################
       ##############################################
+
+def step3_processing(i, bamFile, TEMP):
+    quality_offset = 33
+    minimal_base_quality = 25
+    minimum_mismatch = 1
+    not_filtered, removed= 0, 0
+
+    line = i.split("\t")
+    chrom, position = line[0], line[1]
+    bamposition = chrom + ':' + position + '-' + position
+
+    cmd = "samtools view {} {} > {}".format(bamFile, bamposition, TEMP)
+    subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
+
+    editnuc = line[4]
+    newmismatch = 0
+    mismatchreadcount = 0
+    newcov, newmismatch = 0, 0 
+    f = open(TEMP,"r")
+    basequalFail=0
+    readPosFail=0
+    output =""
+    output_failed =""
+
+    for j in f.readlines():
+        bamfields = j.strip().split("\t")
+        alignment, readstart, cigar, sequence, qualities = bamfields[1], bamfields[3], bamfields[5], bamfields[9], bamfields[10]
+        sequencebases = sequence
+        qualscores = qualities
+
+        currentpos, readpos = int(readstart), 1
+        base_readpos = []
+        
+        # letters 
+        cigarletters = re.findall(r'[MIDNSHP=X]',cigar)
+        # numbers
+        cigarnums = re.split('[MIDNSHP]', cigar)
+
+        '''
+        CIGAR letters:
+            I = insertion into the reference
+            S = Soft clipping, clipped sequence is SEQ
+            D = Deletion from reference 
+            N = Skipped region from reference 
+            M = Alignment Match, can be sequence mismatch or match 
+        '''
+        
+        for k in range(len(cigarletters)):
+            position = int(position)
+            if currentpos > position:
+                break
+            if cigarletters[k] == "I" or cigarletters[k] == "S":
+                readpos = readpos + int(cigarnums[k])
+
+            elif cigarletters[k] == "D" or cigarletters[k] == "N": 
+                currentpos = currentpos + int(cigarnums[k])
+            
+            elif cigarletters[k] == "M":
+                for j in range(int(cigarnums[k])):
+                    if currentpos == position:
+                        base_readpos = readpos
+                    currentpos += 1
+                    readpos += 1
+        
+        if base_readpos:
+            #----------------------------------------------------
+            # Check if the alignment is a reverse strand by looking at the SAM Flags
+            #----------------------------------------------------
+            # set the reverse indicator to 0
+            revers_strand = 0 
+            # Alignment is the SAM Flags
+            # revers_strand = 1 if (alignment & 16)
+            # check the SAM lag, (1000 means this is a revers strand)
+            a = bin(int(alignment))
+            rev_test = a[-5]
+            if len(a) >= 5 and int(rev_test) == 1:
+                revers_strand = 1
+            #----------------------------------------------------
+            # check is within 6 bases of the ends and quality score 
+            #----------------------------------------------------
+            # If the base position is within the 6 base pairs of either side of the sequence -> Pass
+            if (revers_strand == 0 and int(base_readpos) > 6) or (revers_strand == 1 and base_readpos < readpos - 5):
+                # If quality score is greater than or equal to the cutoff 
+                if ord(str(qualscores)[base_readpos-1]) >= minimal_base_quality + quality_offset:
+                    newcov += 1
+                    if (sequencebases[base_readpos-1] == editnuc):
+                        newmismatch+=1
+                else:
+                    basequalFail=1
+            else:
+                readPosFail=1
+
+    #-----------------------
+    # output lines 
+    #-----------------------
+    if newmismatch >= minimum_mismatch: 
+        not_filtered += 1
+        varfreq = (newmismatch/newcov)
+        new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + str(varfreq)+"\n")
+        # outfile.write(new_output_line)
+        output += new_output_line
+
+    #-----------------------
+    # output removed/filtered lines 
+    #-----------------------
+    if newmismatch < minimum_mismatch:
+        removed += 1
+        reason = " no mismatch base; "
+        if basequalFail==1:
+            reason = ' low base quality;'
+        if readPosFail==1:
+            reason = ' mismatch at read end;'
+        
+        new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + "NAN\treason:"+reason + "\n")
+        # outfile_failed.write(new_output_line)
+        output_failed += new_output_line
+
+    return(output, output_failed, removed, not_filtered)
+
 def step_3(outdir, vadir, bamFile):
     ###################################################################
     # Preform hard filtering based on variant location on the read and base quality score 
@@ -160,108 +280,18 @@ def step_3(outdir, vadir, bamFile):
     # counters 
     not_filtered, removed= 0, 0
 
-    for i in infile.readlines():
-        line = i.split("\t")
-        chrom, position = line[0], line[1]
-        bamposition = chrom + ':' + position + '-' + position
+    # set up the parallelization 
+    # Init multiprocessing.Pool()
+    pool = mp.Pool(mp.cpu_count())
+    results = [pool.apply(step3_processing, args=(i, bamFile, TEMP)) for i in infile.readlines()]
 
-        cmd = "samtools view {} {} > {}".format(bamFile, bamposition, TEMP)
-        subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
+    for i in results:
+        outfile.write(i[0])
+        outfile_failed.write(i[1])
+        removed+=int(i[2])
+        not_filtered+=int(i[3])
+    pool.close()    
 
-        editnuc = line[4]
-        newmismatch = 0
-        mismatchreadcount = 0
-        newcov, newmismatch = 0, 0 
-        f = open(TEMP,"r")
-
-        for j in f.readlines():
-            bamfields = j.strip().split("\t")
-            alignment, readstart, cigar, sequence, qualities = bamfields[1], bamfields[3], bamfields[5], bamfields[9], bamfields[10]
-            sequencebases = sequence
-            qualscores = qualities
-
-            currentpos, readpos = int(readstart), 1
-            base_readpos = []
-            
-            # letters 
-            cigarletters = re.findall(r'[MIDNSHP=X]',cigar)
-            # numbers
-            cigarnums = re.split('[MIDNSHP]', cigar)
-
-
-            for k in range(len(cigarletters)):
-                position = int(position)
-                if currentpos > position:
-                    break
-                if cigarletters[k] == "I" or cigarletters[k] == "S":
-                    readpos = readpos + int(cigarnums[k])
-
-                elif cigarletters[k] == "D" or cigarletters[k] == "N": 
-                    currentpos = currentpos + int(cigarnums[k])
-                
-                elif cigarletters[k] == "M":
-                    for j in range(int(cigarnums[k])):
-                        if currentpos == position:
-                            base_readpos = readpos
-                        currentpos += 1
-                        readpos += 1
-            
-            if base_readpos:
-                #----------------------------------------------------
-                # Check if the alignment is a reverse strand by looking at the SAM Flags
-                #----------------------------------------------------
-                # set the reverse indicator to 0
-                revers_strand = 0 
-                # Alignment is the SAM Flags
-                # revers_strand = 1 if (alignment & 16)
-                # check the SAM lag, (1000 means this is a revers strand)
-                a = bin(int(alignment))
-                rev_test = a[-5]
-                if len(a) >= 5 and int(rev_test) == 1:
-                    revers_strand = 1
-                #----------------------------------------------------
-                # check is within 6 bases of the ends and quality score 
-                #----------------------------------------------------
-                # If the base position is within the 6 base pairs of either side of the sequence -> Pass
-                if (revers_strand == 0 and int(base_readpos) > 6) or (revers_strand == 1 and base_readpos < readpos - 5):
-                    # If quality score is greater than or equal to the cutoff 
-                    if ord(str(qualscores)[base_readpos-1]) >= minimal_base_quality + quality_offset:
-                        newcov += 1
-                        if (sequencebases[base_readpos-1] == editnuc):
-                            newmismatch+=1
-                    else:
-                        basequalFail=1
-                else:
-                    readPosFail=1
-
-        #-----------------------
-        # output lines 
-        #-----------------------
-        if newmismatch >= minimum_mismatch: 
-            not_filtered += 1
-            varfreq = (newmismatch/newcov)
-            new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + str(varfreq)+"\n")
-            outfile.write(new_output_line)
-        #-----------------------
-        # output removed/filtered lines 
-        #-----------------------
-        if newmismatch < minimum_mismatch:
-            removed += 1
-            if basequalFail:
-                reason = ' low base quality;'
-            if readPosFail:
-                reason = ' mismatch at read end;'
-            
-            new_output_line = (line[0] + "\t" + line[1]+ "\t" + str(newcov) +","+ str(newmismatch) + "\t" + line[3] + "\t" + line[4] + "\t" + "NAN\treason:"+reason + "\n")
-            outfile_failed.write(new_output_line)
-
-    # report how many removed and remained 
-    info_message = "Variants filtered: {} \n Variants Passed: {}".format(removed, not_filtered)
-    logging.info(info_message)
-
-    infile.close()
-    outfile.close()
-    outfile_failed.close()
 
       ##############################################
 ############################################################
@@ -937,11 +967,11 @@ if __name__ == "__main__":
 
 
 
-    # step_2(outdir, infile, quality_filter)
-    # step_3(outdir, vadir, refined_bam)
+    step_2(outdir, infile, quality_filter)
+    step_3(outdir, vadir, refined_bam)
     step_4(outdir, vadir)
     step_5(outdir, vadir)
-    # step_6(outdir, vadir)
-    # step_7(outdir, vadir, threads=8, bamFile = refined_bam)
-    # step_8(outdir, vadir)
-    # step_9(outdir, vadir, infile)
+    step_6(outdir, vadir)
+    step_7(outdir, vadir, threads=8, bamFile = refined_bam)
+    step_8(outdir, vadir)
+    step_9(outdir, vadir, infile)
