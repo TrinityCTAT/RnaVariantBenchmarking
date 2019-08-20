@@ -158,8 +158,14 @@ def step3_processing(i, bamFile, TEMP):
 
     for j in f.readlines():
         bamfields = j.strip().split("\t")
+<<<<<<< HEAD
         alignment, readstart, cigar, sequence, qualscores = bamfields[1], bamfields[3], bamfields[5], bamfields[9], bamfields[10]
         sequencebases = sequence
+=======
+        alignment, readstart, cigar, sequence, qualities = bamfields[1], bamfields[3], bamfields[5], bamfields[9], bamfields[10]
+        sequencebases = sequence
+        qualscores = qualities
+>>>>>>> e024ed514e75cb4a540dce8d0aa9342b2d1fcbb0
 
         currentpos, readpos = int(readstart), 1
         base_readpos = []
@@ -254,7 +260,10 @@ def step_3(outdir, vadir, bamFile):
     ###################################################################
     # Preform hard filtering based on variant location on the read and base quality score 
     #   1) Filter out the mismatches that occur within the first 6 bases of a read. 
+<<<<<<< HEAD
     #           A.) Use samtools view to get all the overlapping reads for a specific base location on the genome.
+=======
+>>>>>>> e024ed514e75cb4a540dce8d0aa9342b2d1fcbb0
     #   2) Filtering variants that are below the minimal base quality score of 25
     ###################################################################
     
