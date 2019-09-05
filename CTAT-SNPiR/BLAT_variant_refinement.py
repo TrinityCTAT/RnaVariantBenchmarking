@@ -17,33 +17,6 @@ import multiprocessing as mp
 logging.basicConfig(format='\n %(levelname)s : %(message)s', level=logging.DEBUG)
 
 
-def timeStamp():
-    return(datetime.datetime.now().time().strftime('%H:%M:%S'))
-
-##########################
-# Read the vcf inputs
-##########################
-# Take a VCF file as input, separate the head from the variant rows 
-# and return them in lists
-#   Input  : VCF 
-#   output : Head and variants as lists
-def readVCF(infile, STR_VCF_DELIMITER, CHR_COMMENT):
-    vcf_header = []
-    vcf_body = []
-    vcf_file = open(infile, "r").readlines()
-
-    for line in vcf_file:
-        ## Header 
-        if line[0][0] == CHR_COMMENT:
-            vcf_header.append(line)
-            continue
-        ## Variants
-        else:
-            vcf_body.append(line)
-    return vcf_header, vcf_body
-
-
-
 def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamFile):
 
     logging.info("\n Running BLAT for realignment to remap reads containing variants.")
@@ -100,24 +73,25 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
         bamposition = chrom + ':' + position+'-'+position
 
         cmd = "samtools view {} {} > {}".format(bamFile, bamposition, TEMP)
-        subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
-
+        #subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
+        subprocess.check_call(cmd, shell=True)
+        
         editnuc = line[4]
         newmismatch = 0
         mismatchreadcount = 0
         newcov, newmismatch = 0, 0 
 
-        f = open(TEMP,"r")
+        sam_alignments = open(TEMP,"r")
 
         #----------------------------------------
         # read through the input file 
         #----------------------------------------
-        for j in f.readlines():
-            bam_fields = j.strip().split("\t")
+        for sam_align in sam_alignments:
+            bam_fields = sam_align.strip().split("\t")
             alignment, readstart, cigar, sequence_bases, quality_scores = bam_fields[1], bam_fields[3], bam_fields[5], bam_fields[9], bam_fields[10]
 
             current_pos, readpos = int(readstart), 1
-            base_readpos = []
+            base_readpos = False
             
             # leters 
             cigarletters = re.findall(r'[MIDNSHP=X]',cigar)
@@ -142,11 +116,17 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
                 elif cigarletters[k] == "M":
                     for j in range(int(cigarnums[k])):
                         if current_pos == position:
+                            ## at variant site position in genome and read
                             if sequence_bases[readpos-1] == editnuc:
+                                ## have a read containing the variant base
                                 if ord(quality_scores[readpos-1]) >= minimum_base_quality + Phredscore_endcoding_offset:
-                                    base_readpos = 1
+                                    ## consider a quality base call at variant position.
+                                    base_readpos = True
+                                    break
                         current_pos += 1
                         readpos += 1
+
+                        
             if base_readpos:
                 # increment miss matched read count by one 
                 mismatchreadcount+=1
@@ -154,9 +134,11 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
                 fa_line = ">" + chrom + "-" + str(position) + "-" + str(mismatchreadcount) + "\n" + sequence_bases + "\n"
                 # print(fa_line)
                 fa_file.write(fa_line)
-    fa_file.close()
-    infile.close()
 
+    fa_file.close() # fa file containing mismatch-containing reads
+    infile.close() # input vcf file
+    
+    
     #----------------------------------------
     # RUN PBLAT: 
     #       use pblat (parallel BLAT) for realignment of the reads that contain the variants 
@@ -182,14 +164,18 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
     message = "Process the PBLAT output"
     logging.info(message)
 
-    # separate the file 
+    # separate the file by variant-supporting read 
     psl_dict = {}
     psl = open(psl_file_path, "r")
     for i in psl.readlines():
         line = i.strip().split("\t")
         name = line[9]
 
-        line_list = [line[0], line[13],line[17],line[18],line[20]]
+        line_list = [line[0], # alignment score
+                     line[13], # chromosome
+                     line[17], # 
+                     line[18],
+                     line[20]]
         # add to dictionary 
         psl_dict.setdefault(name, []).append(line_list)
     psl.close()
@@ -204,13 +190,13 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
         tmp = i.split("-")
         current_chromosome = tmp[0]
         current_position = int(tmp[1])
-        psl_id = tmp[0] + "_" + tmp[1]
+        psl_id = tmp[0] + "_" + tmp[1]  #chrpos
 
         # set the max line to the first line 
         max_scored_line = psl_dict[i][0]
         max_score = max_scored_line[0]
         list_scores = []
-        # loop over the contents in the dictionary
+        # loop over the multiple mappings for read i
         for j in psl_dict[i]:
             if int(j[0]) > int(max_score):
                 max_scored_line = j
@@ -224,7 +210,8 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
         overlaping = 0
         # if more than one read was found
         if len(list_scores) == 1:
-            list_scores.append(0)
+            list_scores.append(0) # handles the unique mapping scenario
+
         list_scores.sort(reverse = True) 
         # check chromosomes to make sure match 
         if max_scored_line[1] == current_chromosome:
@@ -232,6 +219,8 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
             # check second best hit score 
             if list_scores[1] < (list_scores[0]*score_limit):
 
+                # have multi-mapping read.
+                # ensure that the best match corresponds to our variant location in the genome:
                 block_count, block_sizes, block_starts = max_scored_line[2], max_scored_line[3].split(","), max_scored_line[4].split(",")
                 for k in range(int(block_count)):
                     start_position = int(block_starts[k])+1
@@ -240,16 +229,22 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
                     if (current_position >= start_position) and (current_position <= end_position):
                         overlaping = 1
                 if overlaping:
+                    # track the number of reads with best matches hitting the expected variant position according to blat. 
                     if (psl_id in keep_dict): 
                         keep_dict[psl_id] += 1
                     else:
                         keep_dict[psl_id] = 1
         if overlaping == 0:
+            # multiple high-scoring hits
+            # track count in filter_dict
             if (psl_id in filter_dict): 
                 filter_dict[psl_id] += 1
             else:
                 filter_dict[psl_id] = 1
 
+
+    ######################
+    ## re-process the VCF, partitioning into pass vs. fail sites.
     
     outfile_passed = open(outfile_passed_path, "w")
     outfile_failed = open(outfile_failed_path, "w")
@@ -271,6 +266,8 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
 
             
             if (new_alter >= minimum_mismatch) and (new_alter > discard_counter):
+                # have at least one pass mismatch read and number passed exceeds number discarded.
+                
                 new_output_line =line[0] + "\t" + line[1] + "\t" + str(new_alter) + "\t" + line[3] + "\t" + line[4] + "\n"
                 outfile_passed.write(new_output_line)
                 passed += 1
@@ -285,7 +282,7 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
 
     outfile_passed.close()
     outfile_failed.close()
-
+    
     print("Variants kept:", passed)
     print("Variants filtered:", failed)
 
