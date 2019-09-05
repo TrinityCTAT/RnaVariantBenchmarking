@@ -88,7 +88,24 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
         #----------------------------------------
         for sam_align in sam_alignments:
             bam_fields = sam_align.strip().split("\t")
-            alignment, readstart, cigar, sequence_bases, quality_scores = bam_fields[1], bam_fields[3], bam_fields[5], bam_fields[9], bam_fields[10]
+            (read_name,
+             alignment,
+             readstart,
+             cigar,
+             sequence_bases,
+             quality_scores) = (bam_fields[0],
+                                bam_fields[1],
+                                bam_fields[3],
+                                bam_fields[5],
+                                bam_fields[9],
+                                bam_fields[10])
+            
+
+            m = re.search("NH:i:\d+", sam_align)
+            if not m:
+                print("Error, sam line {} is missing NH:i:number hit count".format(sam_align), file=sys.stderr)
+                sys.exit(1)
+            NH_tag = m.group(0)
 
             current_pos, readpos = int(readstart), 1
             base_readpos = False
@@ -131,7 +148,10 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
                 # increment miss matched read count by one 
                 mismatchreadcount+=1
                 # write the line to the FA file 
-                fa_line = ">" + chrom + "-" + str(position) + "-" + str(mismatchreadcount) + "\n" + sequence_bases + "\n"
+                fa_line = "^".join([">" + chrom,
+                                    str(position),
+                                    str(mismatchreadcount),
+                                    read_name + "," + NH_tag]) + "\n" + sequence_bases + "\n"
                 # print(fa_line)
                 fa_file.write(fa_line)
 
@@ -184,14 +204,20 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
     filter_dict = {}
 
     # Key format example 
-    #   'chr1-14542-1'
+    #   'chr1-14542-1-readname'
 
+    # track the reads that fail this check.
+    failed_reads_filename = outprefix + ".failed_reads"
+    failed_reads_ofh = open(failed_reads_filename, 'w')
+    
     for i in psl_dict:
-        tmp = i.split("-")
+        tmp = i.split("^")
         current_chromosome = tmp[0]
         current_position = int(tmp[1])
         psl_id = tmp[0] + "_" + tmp[1]  #chrpos
 
+        read_name = tmp[3]
+        
         # set the max line to the first line 
         max_scored_line = psl_dict[i][0]
         max_score = max_scored_line[0]
@@ -241,8 +267,10 @@ def blat_variant_refinement(vcf_infile, outdir, genome_fasta_file, threads, bamF
                 filter_dict[psl_id] += 1
             else:
                 filter_dict[psl_id] = 1
+            failed_reads_ofh.write(read_name + "\n")
 
-
+    failed_reads_ofh.close()
+    
     ######################
     ## re-process the VCF, partitioning into pass vs. fail sites.
     
@@ -349,7 +377,7 @@ if __name__ == "__main__":
         os.mkdir(outdir)
 
 
-    blat_variant_refinement(infile, outdir, genome_fasta_file, threads=8, bamFile = refined_bam)
+    blat_variant_refinement(infile, outdir, genome_fasta_file, threads=args_parsed.i_number_threads, bamFile = refined_bam)
     
 
     sys.exit(0)
