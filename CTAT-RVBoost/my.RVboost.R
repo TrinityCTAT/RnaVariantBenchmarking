@@ -151,10 +151,8 @@ fit.res <- fitRVmodel(input.mtx=tmp.mtx,
                       pos.vec=parseRNA.res$pos.vec,
                       ada.n=2e4)
 
-write.table(fit.res, file=paste(output, "fit.res", sep="/"), quote=F, sep="\t")
 
-
-                                        #=== compute SNP.conf score
+## === compute SNP.conf score
 RVboost.ECDF <- ecdf(fit.res$fitted.values[which(fit.res$train.label==1)])
 RVboost.Q.score <- RVboost.ECDF(fit.res$fitted.values)
 score <- paste (output,"original_score.txt",sep="/");
