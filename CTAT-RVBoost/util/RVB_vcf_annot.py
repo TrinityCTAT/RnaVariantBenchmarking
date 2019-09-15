@@ -19,10 +19,8 @@ logger = logging.getLogger('ctat_mutations')
 logging.basicConfig(stream=sys.stderr, format=FORMAT, level=logging.INFO)
 
 
-sys.path.insert(0, os.path.sep.join([os.path.dirname(os.path.realpath(__file__)), "../pylib"]))
+sys.path.insert(0, os.path.sep.join([os.path.dirname(os.path.realpath(__file__)), "../../pylib"]))
 from Pipeliner import Pipeliner, Command, run_cmd, ParallelCommandList
-
-
 
 
 MAYO_SCRIPTS_DIR = "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/src"

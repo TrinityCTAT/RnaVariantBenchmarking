@@ -2,19 +2,19 @@
 
 stdin <- commandArgs(TRUE) 
 
-if(length(stdin) < 1 || length(stdin) > 2) {
-	stop("ERROR! Incorrect number of arguments. \nUSAGE: RVboost.R input_VCF [attrs=\"DJ,PctExtPos,ReadPosRankSum,QD,FS,ED\"] \n\n")
+if(length(stdin) < 2 || length(stdin) > 3) {
+	stop("ERROR! Incorrect number of arguments. \nUSAGE: RVboost.R input_VCF output_dir [attrs=\"DJ,PctExtPos,ReadPosRankSum,QD,FS,ED\"] \n\n")
 }
 
 ###arguments
 inputVCF <- stdin[1]
-
+output <- stdin[2]
 
 ### use these attributes from VCF file to make a model
 sel.attri <- c("DJ","PctExtPos","ReadPosRankSum","QD","FS","ED") 
 
-if (length(stdin) == 2) {
-    sel.attri = strsplit(stdin[2], ",")[[1]]
+if (length(stdin) == 3) {
+    sel.attri = strsplit(stdin[3], ",")[[1]]
 }
 message("Using attribute list: ", sel.attri)
 
@@ -23,7 +23,7 @@ message("Using attribute list: ", sel.attri)
 
 hapmap <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/resources/hapmap.ids.txt.gz"
 model <- "adaboost"
-output <- "rvboost_outdir"
+
 
 
 if (! file.exists(output)) {

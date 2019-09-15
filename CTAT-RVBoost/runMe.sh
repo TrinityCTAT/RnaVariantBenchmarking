@@ -1,1 +1,1 @@
-./my.RVboost.R ./inputs/id.raw.small.vcf
+./rvboost_wrapper.py --input_vcf inputs/id.raw.small.vcf --output_dir tmpdir
