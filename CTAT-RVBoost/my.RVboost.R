@@ -21,7 +21,7 @@ message("Using attribute list: ", sel.attri)
 ##library <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/Rlibs/"
 ##.libPaths(library)
 
-hapmap <- "resources/hapmap.ids.txt.gz"
+hapmap <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/resources/hapmap.ids.txt.gz"
 model <- "adaboost"
 output <- "rvboost_outdir"
 
