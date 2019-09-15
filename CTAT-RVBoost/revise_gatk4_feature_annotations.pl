@@ -29,6 +29,8 @@ main: {
         $keyvals{RPT} = (defined $keyvals{RPT}) ? 1:0;
         $keyvals{SPLICEADJ} = (defined $keyvals{SPLICEADJ}) ? $keyvals{SPLICEADJ} : -1;
         $keyvals{Homopolymer} = (defined $keyvals{Homopolymer}) ? $keyvals{Homopolymer} : 0;
+        $keyvals{RNAEDIT} = (defined $keyvals{RNAEDIT}) ? 1 : 0;
+        
         
         my @new_vals;
         foreach my $key (keys %keyvals) {
