@@ -2,14 +2,24 @@
 
 stdin <- commandArgs(TRUE) 
 
-if(length(stdin) != 1){
-	stop("ERROR! Incorrect number of arguments. \nUSAGE: RVboost.R [input VCF]\n\n")
+if(length(stdin) < 1 || length(stdin) > 2) {
+	stop("ERROR! Incorrect number of arguments. \nUSAGE: RVboost.R input_VCF [attrs=\"DJ,PctExtPos,ReadPosRankSum,QD,FS,ED\"] \n\n")
 }
 
 ###arguments
 inputVCF <- stdin[1]
-#library <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/Rlibs/"
-#.libPaths(library)
+
+
+### use these attributes from VCF file to make a model
+sel.attri <- c("DJ","PctExtPos","ReadPosRankSum","QD","FS","ED") 
+
+if (length(stdin) == 2) {
+    sel.attri = strsplit(stdin[2], ",")
+}
+message("Using attribute list: ", sel.attri)
+
+##library <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/Rlibs/"
+##.libPaths(library)
 
 hapmap <- "resources/hapmap.ids.txt.gz"
 model <- "adaboost"
@@ -122,9 +132,6 @@ fitRVmodel <- function( input.mtx, DB.filename, DB.ID="rsid", pos.vec=NULL,
     
 }
 
-
-### use these attributes from VCF file to make a model
-sel.attri <- c("DJ","PctExtPos","ReadPosRankSum","QD","FS","ED") 
 
 parseRNA.res <- parseVCF(inputVCF,
                          sel.info.attr=sel.attri)
