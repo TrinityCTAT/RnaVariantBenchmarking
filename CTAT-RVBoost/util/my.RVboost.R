@@ -62,7 +62,8 @@ parseVCF <- function(VCF.filename,
     
     N.attri <- length(sel.info.attr)
     N.var <- nrow(info.res)
-    attri.mtx <- mat.or.vec(N.var,N.attri)
+    #attri.mtx <- mat.or.vec(N.var,N.attri)
+    attri.mtx <- matrix(nrow=N.var,ncol=N.attri)
     colnames(attri.mtx) <- sel.info.attr
     rownames(attri.mtx) <- rownames(info.res)
     for(k in 1:N.attri)
@@ -143,7 +144,9 @@ parseRNA.res <- parseVCF(inputVCF,
                          sel.info.attr=sel.attri)
 
 tmp.mtx <- parseRNA.res$attri.mtx
-tmp.mtx[,"ReadPosRankSum"] <- abs(tmp.mtx[,"ReadPosRankSum"]) # make ReandPosRank monotonical
+if ("ReadPosRankSum" %in% colnames(tmp.mtx)) {
+    tmp.mtx[,"ReadPosRankSum"] <- abs(tmp.mtx[,"ReadPosRankSum"]) # make ReandPosRank monotonical
+}
 
                                         #=== imputation of missing values
 for(k in 1:ncol(tmp.mtx)){
