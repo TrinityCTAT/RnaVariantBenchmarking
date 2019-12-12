@@ -220,11 +220,16 @@ class XGBoost:
         #---------------------------------------------
         #Subset the DataFrame to select info features 
         #---------------------------------------------
-        DF_subset = DF[['AC', 'AF', 'AN', 'BaseQRankSum', 'DP', 'Entropy', 'FS', 
-               'Homopolymer', 'MLEAC', 'MLEAF', 'MMF', 'MQ', 'MQRankSum',
-               'QD', 'RNAEDIT', 'RPT', 'ReadPosRankSum',  'SOR', 'SPLICEADJ',
-               'TDM', 'TMMR', 'TPR', 'VAF','VPR', 'SNP','GT', 'DJ', 'ED', 'RS']]
+        colnames = list(DF.columns)
+        for remove_these in ['ID', 'CHROM', 'POS','REF','ALT']:
+            colnames.remove(remove_these)
 
+        # DF_subset = DF[['AC', 'AF', 'AN', 'BaseQRankSum', 'DP', 'Entropy', 'FS', 
+        #        'Homopolymer', 'MLEAC', 'MLEAF', 'MMF', 'MQ', 'MQRankSum',
+        #        'QD', 'RNAEDIT', 'RPT', 'ReadPosRankSum',  'SOR', 'SPLICEADJ',
+        #        'TDM', 'TMMR', 'TPR', 'VAF','VPR', 'SNP','GT', 'DJ', 'ED', 'RS']]
+        print(colnames)
+        DF_subset = DF[colnames]
         print(DF_subset.head())
 
         #-------------------------------------------
@@ -250,13 +255,6 @@ class XGBoost:
         #-------------------------------------------
         # Subset and set the values to floats
         #-------------------------------------------
-        # DF_Features = DF_subset[['AC', 'AF', 'AN', 'BaseQRankSum', 'DP', 'Entropy', 'FS', 'Homopolymer',
-        #    'MLEAC', 'MLEAF', 'MMF', 'MQ', 'MQRankSum', 'QD', 'RNAEDIT', 'RPT',
-        #    'ReadPosRankSum', 'SOR', 'SPLICEADJ', 'TDM', 'TMMR', 'TPR', 'VAF',
-        #    'VPR', 'DJ', 'ED', 'GT_0/1', 'GT_1/1', 'SNP_A:C', 'SNP_A:G', 'SNP_A:T',
-        #    'SNP_C:A', 'SNP_C:G', 'SNP_C:T', 'SNP_G:A', 'SNP_G:C', 'SNP_G:T',
-        #    'SNP_T:A', 'SNP_T:C', 'SNP_T:G', 'RS']]
-        # DF_Features = DF_subset[["QD","ReadPosRankSum", "FS", "VPR", "VAF", "SPLICEADJ", "RPT", "Homopolymer", "Entropy", "RNAEDIT"]]
         print(self.features)
         DF_Features = DF_subset[self.features]
 
@@ -352,6 +350,9 @@ def predictedOutput(obj):
             X      : Feature dataset 
     '''
 
+    # save the scores for all the variants 
+    obj.data.to_csv("obj.data", sep='\t', index=True)
+
     # get variants that are common variants 
     RS_subset = obj.data[ obj.data['In_TRUTHSET'] == 1 ]
     # RS_subset = obj.data
@@ -387,11 +388,11 @@ def predictedOutput(obj):
 
     # find the max value for the xgbscore among all the variants that the ECDF value falls 0.05 and bellow 
     max_score = max(real_neg_snps['xgb_score'])
-    print("MAX VAL", max_score)
+    # print("MAX VAL", max_score)
 
     # pull out the index for the variants that have sgb scores that fall above the 0.05 value 
     real_snps = set( obj.data[ obj.data['xgb_score'] > max_score ].index )
-    print("length:",len(real_snps))
+    # print("length:",len(real_snps))
 
     # Get the ID'S CHROM:POS
     obj.vcf['chr:pos'] = obj.vcf['CHROM']+':'+obj.vcf['POS'].astype(str)

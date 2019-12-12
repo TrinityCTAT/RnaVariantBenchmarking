@@ -1,0 +1,1 @@
+rm -r test_output/ ecdf_* DF_* obj.data

@@ -231,11 +231,16 @@ class ADABoost:
         #---------------------------------------------
         #Subset the DataFrame to select info features 
         #---------------------------------------------
-        DF_subset = DF[['AC', 'AF', 'AN', 'BaseQRankSum', 'DP', 'Entropy', 'FS', 
-               'Homopolymer', 'MLEAC', 'MLEAF', 'MMF', 'MQ', 'MQRankSum',
-               'QD', 'RNAEDIT', 'RPT', 'ReadPosRankSum',  'SOR', 'SPLICEADJ',
-               'TDM', 'TMMR', 'TPR', 'VAF','VPR', 'SNP','GT', 'DJ', 'ED', 'RS']]
+        colnames = list(DF.columns)
+        for remove_these in ['ID', 'CHROM', 'POS','REF','ALT']:
+            colnames.remove(remove_these)
 
+        # DF_subset = DF[['AC', 'AF', 'AN', 'BaseQRankSum', 'DP', 'Entropy', 'FS', 
+        #        'Homopolymer', 'MLEAC', 'MLEAF', 'MMF', 'MQ', 'MQRankSum',
+        #        'QD', 'RNAEDIT', 'RPT', 'ReadPosRankSum',  'SOR', 'SPLICEADJ',
+        #        'TDM', 'TMMR', 'TPR', 'VAF','VPR', 'SNP','GT', 'DJ', 'ED', 'RS']]
+        print(colnames)
+        DF_subset = DF[colnames]
         print(DF_subset.head())
 
         #-------------------------------------------
