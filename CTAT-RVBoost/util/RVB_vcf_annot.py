@@ -25,7 +25,7 @@ from Pipeliner import Pipeliner, Command, run_cmd, ParallelCommandList
 
 MAYO_SCRIPTS_DIR = "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/src"
 GENEBED = "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/resources/exons.bed"
-GENOME = "/seq/RNASEQ/__ctat_genome_lib_building/August_15_2019/GRCh37_gencode_v19_CTAT_lib_Aug152019.plug-n-play/ctat_genome_lib_build_dir/ref_genome.fa"
+GENOME = "/seq/RNASEQ/__ctat_genome_lib_building/Oct2019/GRCh37_gencode_v19_CTAT_lib_Oct012019.plug-n-play/ctat_genome_lib_build_dir/ref_genome.fa"
 
 SAMTOOLS="/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/bin/samtools/"
 BLAT="/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/bin/blatSrc/linux.x86_64/"
