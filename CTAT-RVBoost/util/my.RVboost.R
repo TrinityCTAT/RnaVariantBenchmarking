@@ -22,8 +22,6 @@ message("Using attribute list: ", sel.attri)
 ##.libPaths(library)
 
 hapmap <- "/seq/RNASEQ/TOOLS/RVBOOST/RVboost_0.1/resources/hapmap.ids.txt.gz"
-hapmap  <- "/seq/RNASEQ/mbrown/CTAT/GIAB/RVBoost/RnaVariantBenchmarking_noQDReadRankSum_dbsnp/dbsnp_positions.txt"
-hapmap <- "/seq/RNASEQ/mbrown/CTAT/FINAL_OUTPUT/GIAB/Boosting/HG19/my.RVBoost_rvbFeatures_dbsnp/dbsnp_positions.txt"
 model <- "adaboost"
 
 
