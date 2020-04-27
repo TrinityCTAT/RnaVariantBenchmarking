@@ -84,36 +84,40 @@ def step_2(outdir, infile, quality_filter):
     for i in range(len(body)):
         line = body[i].split("\t")
 
+        # Filter if not in chromosome 
+        if len(line[0]) < 6:
         # Filter quality is at least 20 
-        if float(line[5]) >= quality_filter:
-            # if GT and AD depths
-            # Format ex:
-            #   GT:AD   0/1:28,2
-            if re.search(r'[GT:AD]',line[8]):
-                tmp = line[9].split(":")
-                alleleDepth = tmp[1].split(",")
+	        if float(line[5]) >= quality_filter:
+	            # if GT and AD depths
+	            # Format ex:
+	            #   GT:AD   0/1:28,2
+	            if re.search(r'[GT:AD]',line[8]):
+	                tmp = line[9].split(":")
+	                alleleDepth = tmp[1].split(",")
 
-                referenceDepth = int(alleleDepth[0])
-                altDepth = int(alleleDepth[1])
+	                referenceDepth = int(alleleDepth[0])
+	                altDepth = int(alleleDepth[1])
 
-                if referenceDepth != 0 or altDepth != 0:
-                    totalDepth = (referenceDepth + altDepth)
+	                if referenceDepth != 0 or altDepth != 0:
+	                    totalDepth = (referenceDepth + altDepth)
 
-                    depths = str(totalDepth) + "," + str(altDepth)
-                    altFraction = str(altDepth / totalDepth)
-                    
-                    newLine_list=[line[0], line[1], depths, line[3], line[4], altFraction]
-                    newLine = "\t".join(newLine_list)
+	                    depths = str(totalDepth) + "," + str(altDepth)
+	                    altFraction = str(altDepth / totalDepth)
+	                    
+	                    newLine_list=[line[0], line[1], depths, line[3], line[4], altFraction]
+	                    newLine = "\t".join(newLine_list)
 
-                    #Write the variants that passed to a new file 
-                    outputFile.write(newLine+"\n")
+	                    #Write the variants that passed to a new file 
+	                    outputFile.write(newLine+"\n")
 
-                    passed += 1
+	                    passed += 1
 
-                else:
-                    removed.append(body[i])
-            else:
-                removed.append(body[i])
+	                else:
+	                    removed.append(body[i])
+	            else:
+	                removed.append(body[i])
+	        else:
+	            removed.append(body[i])
         else:
             removed.append(body[i])
         failed = len(removed)
