@@ -18,7 +18,7 @@ logging.basicConfig(format='\n %(levelname)s : %(message)s', level=logging.DEBUG
 
 
 def timeStamp():
-    return(datetime.datetime.now().time().strftime('%H:%M:%S'))
+    return( datetime.datetime.now().time().strftime('%H:%M:%S')) 
 
 ##########################
 # Read the vcf inputs
@@ -58,7 +58,8 @@ def step_2(outdir, infile, quality_filter):
     #               triploid call 1/1
     ###################################################################
     
-    logging.info("SNPiR - Step 2: Converting VCF to custom SNPiR format & filtering out variants with quality < 20 \n",timeStamp)
+    logging.info("SNPiR - Step 2: Converting VCF to custom SNPiR format & filtering out variants with quality < 20 " + timeStamp() + " \n")
+    # logging.info(timeStamp())
 
     ##############
     # Constants #
@@ -69,7 +70,7 @@ def step_2(outdir, infile, quality_filter):
     removed=[]
     # output file
     outputFile_path = "{}/step2.txt".format(outdir)
-    outputFailed_path = "{}/step2_failed.txt".format(outdir)
+    outputFailed_path = "{}/step2_excluded.txt".format(outdir)
     # counters to see how many variants pass and fail 
     passed, failed = 0, 0
 
@@ -107,7 +108,7 @@ def step_2(outdir, infile, quality_filter):
 	                    newLine_list=[line[0], line[1], depths, line[3], line[4], altFraction]
 	                    newLine = "\t".join(newLine_list)
 
-	                    #Write the variants that passed to a new file 
+	                    # Write the variants that passed to a new file 
 	                    outputFile.write(newLine+"\n")
 
 	                    passed += 1
@@ -263,7 +264,7 @@ def step_3(outdir, vadir, bamFile):
     #   2) Filtering variants that are below the minimal base quality score of 25
     ###################################################################
     
-    logging.info("SNPiR - STEP 3: Filtering out mismatches in first 6 bp of reads")
+    logging.info("SNPiR - STEP 3: Filtering out mismatches in first 6 bp of reads " + timeStamp() + " \n")
 
     ##############
     # Constants #
@@ -274,7 +275,7 @@ def step_3(outdir, vadir, bamFile):
     
     step3_file = "{}/step2.txt".format(outdir)
     step3_outfile = "{}/step3.txt".format(outdir)
-    outfile_failed = "{}/step3_failed.txt".format(outdir)
+    outfile_failed = "{}/step3_excluded.txt".format(outdir)
 
     TEMP = step3_outfile + '_tmp'
 
@@ -313,7 +314,7 @@ def step_4(outdir, vadir):
     #    RepeatMasker is provided by UCSC Genome Browser 
     ###################################################################
     
-    logging.info("\n STEP 4: \n Using BEDtools subtract to remove sites in repetitive regions based on RepeatMasker annotation")
+    logging.info("\n STEP 4: \n Using BEDtools subtract to remove sites in repetitive regions based on RepeatMasker annotation " + timeStamp() + " \n")
 
     #############
     # Constants #
@@ -412,7 +413,7 @@ def step_5(outdir, vadir):
     # 
     ###################################################################
 
-    logging.info("\n STEP 5: \n Filtering intronic candidates within 4 bp of splicing junctions")
+    logging.info("\n STEP 5: \n Filtering intronic candidates within 4 bp of splicing junctions " + timeStamp() + " \n")
 
     ###############
     # Constants 
@@ -427,7 +428,7 @@ def step_5(outdir, vadir):
     infile = open(step5_infile, 'r')
     genefile = open(genefile_path, 'r')
     outfile = open(step5_outfile, 'w')
-    outfile_failed = open(step5_outfile + "_failed.txt", 'w')
+    outfile_failed = open(step5_outfile + "_excluded.txt", 'w')
 
     splice_dist = 4
     infile_list=[]
@@ -482,9 +483,9 @@ def step_5(outdir, vadir):
 ############################################################
       ##############################################
 
-def step_6(outdir, vadir):
+def step_6(outdir, vadir, refgenome_path):
 
-    logging.info("\n STEP 6: \n Filtering candidates in homopolymer runs")
+    logging.info("\n STEP 6: \n Filtering candidates in homopolymer runs " + timeStamp() + " \n")
 
     ###############
     # Constants 
@@ -492,7 +493,7 @@ def step_6(outdir, vadir):
     # Set File Paths 
     infile_path = "{}/step5.txt".format(outdir)
     outfile_path = "{}/step6.txt".format(outdir)
-    refgenome_path = "{}/refs/ucsc.hg19.fasta".format(vadir)
+    # refgenome_path = "{}/refs/ucsc.hg19.fasta".format(vadir)
 
     # distance from splice region
     splice_dist = 4
@@ -509,7 +510,7 @@ def step_6(outdir, vadir):
     infile = open(infile_path, 'r')
     refgenome = open(refgenome_path, 'r')
     outfile = open(outfile_path, 'w')
-    outfile_failed = open(outfile_path + "_failed.txt", 'w')
+    outfile_failed = open(outfile_path + "_excluded.txt", 'w')
 
     temp = ""
     temp_bed_path = "{}/tmp.bed".format(outdir)
@@ -571,9 +572,7 @@ def step_6(outdir, vadir):
             failed+=1
             outfile_failed.write(i)
 
-    # remove temp files 
-    cmd = "rm {}.psl*".format(outfile_path)
-    subprocess.Popen(cmd, shell=True)
+            
 
     # close files 
     outfile.close()
@@ -592,9 +591,9 @@ def step_6(outdir, vadir):
       ##############################################
 
 
-def step_7(outdir, vadir, threads, bamFile):
+def step_7(outdir, vadir, threads, bamFile, refgenome_path):
 
-    logging.info("\n SNPiR - STEP 7: Running BLAT for realignment to remap reads containing variants.")
+    logging.info("\n SNPiR - STEP 7: Running BLAT for realignment to remap reads containing variants. " + timeStamp() + " \n")
 
 
     ##############
@@ -609,8 +608,8 @@ def step_7(outdir, vadir, threads, bamFile):
     # File Paths input and output 
     step7_infile_path = "{}/step6.txt".format(outdir)
     step7_outfile_path = "{}/step7.txt".format(outdir)
-    outfile_failed_path = "{}/step7_failed.txt".format(outdir)
-    refgenome_path = "{}/refs/ucsc.hg19.fasta".format(vadir)
+    outfile_failed_path = "{}/step7_excluded.txt".format(outdir)
+    # refgenome_path = "{}/refs/ucsc.hg19.fasta".format(vadir)
 
     fa_file_path = "{}.fa".format(step7_outfile_path)
     psl_file_path = "{}.psl".format(step7_outfile_path)
@@ -846,7 +845,7 @@ def step_8(outdir, vadir):
     # STEP 3.8
     # Bedtools Subtract
     #---------------------------------
-    logging.info("\n STEP 8: \n Filtering out currently known RNA-editing sites using BEDtools subtract.")
+    logging.info("\n STEP 8: \n Filtering out currently known RNA-editing sites using BEDtools subtract. " + timeStamp() + " \n")
 
     #--------------------
     # Comstants 
@@ -887,7 +886,7 @@ def step_9(outdir, vadir, infile):
     # Bedtools intersect
     #---------------------------------
     bedtools = "{}/tools/bedtools-2.25.0".format(vadir)
-    logging.info("\n STEP 9: \n Bedtools intersect")
+    logging.info("\n STEP 9: \n Bedtools intersect " + timeStamp() + " \n")
 
     cmd = "bedtools intersect \
         -a {} \
@@ -925,6 +924,8 @@ def make_menu():
                            required = True, help = "The input BAM file.")
     required.add_argument( "-V", metavar = "VaDiR_ Directory", dest = "str_VaDiR_path",
                            required = True, help = "The path to the VaDiR directory.")
+    required.add_argument( "-R", metavar = "Reference Genome", dest = "refgenome_path",
+                           required = True, help = "The path to the needed reference genome.")
     
     required.add_argument( "-O", metavar = "Output_Directory", dest = "str_out_dir",
                            required = False, help = "Where to put the results from SNPiR.",
@@ -960,6 +961,7 @@ if __name__ == "__main__":
     outdir = args_parsed.str_out_dir
     vadir = args_parsed.str_VaDiR_path
     refined_bam = args_parsed.str_BAM_file
+    refgenome_path = args_parsed.refgenome_path
 
     # Get the output directory and create it if it does not exist
     if not os.path.exists(outdir):
@@ -978,7 +980,7 @@ if __name__ == "__main__":
     step_3(outdir, vadir, refined_bam)
     step_4(outdir, vadir)
     step_5(outdir, vadir)
-    step_6(outdir, vadir)
-    step_7(outdir, vadir, threads=8, bamFile = refined_bam)
+    step_6(outdir, vadir, refgenome_path)
+    step_7(outdir, vadir, threads=8, bamFile = refined_bam, refgenome_path = refgenome_path)
     step_8(outdir, vadir)
     step_9(outdir, vadir, infile)
