@@ -962,6 +962,7 @@ if __name__ == "__main__":
     vadir = args_parsed.str_VaDiR_path
     refined_bam = args_parsed.str_BAM_file
     refgenome_path = args_parsed.refgenome_path
+    threads_num = args_parsed.i_number_threads
 
     # Get the output directory and create it if it does not exist
     if not os.path.exists(outdir):
@@ -981,6 +982,6 @@ if __name__ == "__main__":
     step_4(outdir, vadir)
     step_5(outdir, vadir)
     step_6(outdir, vadir, refgenome_path)
-    step_7(outdir, vadir, threads=8, bamFile = refined_bam, refgenome_path = refgenome_path)
+    step_7(outdir, vadir, threads=threads_num, bamFile = refined_bam, refgenome_path = refgenome_path)
     step_8(outdir, vadir)
     step_9(outdir, vadir, infile)
