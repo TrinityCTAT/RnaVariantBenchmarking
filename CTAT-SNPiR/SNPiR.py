@@ -42,12 +42,43 @@ def readVCF(infile, STR_VCF_DELIMITER, CHR_COMMENT):
             vcf_body.append(line)
     return vcf_header, vcf_body
 
+
+def filterindels(outdir, infile, refgenome_path):
+    # Check if GATK_HOME is provided
+    gatk_home = os.getenv("GATK_HOME")
+    if not gatk_home:
+        exit("Error, missing path to GATK in $GATK_HOME.")
+    
+    # identify gatk4_jar file
+    gatk4_jar = glob.glob(os.path.join(gatk_home, "gatk-package-4.*-local.jar"))
+    if len(gatk4_jar) != 1:
+        raise RuntimeError("Error, cannot locate single gatk-package-4.*-local.jar in {}".format(gatk_home))
+    gatk_path = os.path.abspath(gatk4_jar[0])
+    gatk_path = gatk_path
+    
+    logging.info("Filtering out variants to only include SNP's " + timeStamp() + " \n")
+
+
+        # select variants
+    output_file = os.path.join(outdir, "snps_only.vcf")
+    filter_cmd = " ".join(["java -jar", gatk_path,
+                                    "SelectVariants",
+                                    "-R", refgenome_path,
+                                    "-V", infile,
+                                    "-select-type SNP",
+                                    "--exclude-filtered",
+                                    "-O", output_file])
+
+    print("Running: ", filter_cmd)
+    subprocess.Popen(filter_cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, encoding='utf8', shell=True).communicate()
+
+
       ##############################################
 ############################################################
 ########################## Step 2 ##########################
 ############################################################
       ##############################################
-def step_2(outdir, infile, quality_filter):
+def step_2(outdir, quality_filter):
     ###################################################################
     # Convert the input VCF file to a custom format for SNPiR. 
     #   Preforms hard filtering. 
@@ -68,6 +99,9 @@ def step_2(outdir, infile, quality_filter):
     CHR_COMMENT = "#"
     # keep track of which lines are removed 
     removed=[]
+
+    # input file
+    input_file = "{}/snp_only.vcf".format(outdir)
     # output file
     outputFile_path = "{}/step2.txt".format(outdir)
     outputFailed_path = "{}/step2_excluded.txt".format(outdir)
@@ -84,7 +118,6 @@ def step_2(outdir, infile, quality_filter):
     outputFailed = open(outputFailed_path, "w")
     for i in range(len(body)):
         line = body[i].split("\t")
-
         # Filter if not in chromosome 
         if len(line[0]) < 6:
         # Filter quality is at least 20 
@@ -976,8 +1009,8 @@ if __name__ == "__main__":
     #     os.makedirs(checkpoints_dir)
 
 
-
-    step_2(outdir, infile, quality_filter)
+    filterindels(outdir, infile, refgenome_path)
+    step_2(outdir, quality_filter)
     step_3(outdir, vadir, refined_bam)
     step_4(outdir, vadir)
     step_5(outdir, vadir)
