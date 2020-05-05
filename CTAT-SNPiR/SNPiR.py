@@ -60,7 +60,7 @@ def filterindels(outdir, infile, refgenome_path):
 
 
         # select variants
-    output_file = os.path.join(outdir, "snps_only.vcf")
+    output_file = os.path.join(outdir, "snp_only.vcf")
     filter_cmd = " ".join(["java -jar", gatk_path,
                                     "SelectVariants",
                                     "-R", refgenome_path,
@@ -101,7 +101,7 @@ def step_2(outdir, quality_filter):
     removed=[]
 
     # input file
-    input_file = "{}/snp_only.vcf".format(outdir)
+    infile = "{}/snp_only.vcf".format(outdir)
     # output file
     outputFile_path = "{}/step2.txt".format(outdir)
     outputFailed_path = "{}/step2_excluded.txt".format(outdir)
