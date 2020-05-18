@@ -78,7 +78,7 @@ def filterindels(outdir, infile, refgenome_path):
 ########################## Step 2 ##########################
 ############################################################
       ##############################################
-def step_2(outdir, quality_filter):
+def step_2(outdir, quality_filter, step2_infile):
     ###################################################################
     # Convert the input VCF file to a custom format for SNPiR. 
     #   Preforms hard filtering. 
@@ -101,7 +101,7 @@ def step_2(outdir, quality_filter):
     removed=[]
 
     # input file
-    infile = "{}/snp_only.vcf".format(outdir)
+    infile = step2_infile
     # output file
     outputFile_path = "{}/step2.txt".format(outdir)
     outputFailed_path = "{}/step2_excluded.txt".format(outdir)
@@ -162,8 +162,8 @@ def step_2(outdir, quality_filter):
         outputFailed.write(i)
     outputFailed.close()
 
-    print("Variants Passed:", passed)
-    print("Variants filtered:", failed)
+    print("Variants Passed step2:", passed)
+    print("Variants filtered step2:", failed)
 
       ##############################################
 ############################################################
@@ -913,20 +913,21 @@ def step_8(outdir, vadir):
 
 
 
-def step_9(outdir, vadir, infile):
+def step_9(outdir, vadir, input_file):
     #---------------------------------
     # STEP 3.9
     # Bedtools intersect
     #---------------------------------
     bedtools = "{}/tools/bedtools-2.25.0".format(vadir)
     logging.info("\n STEP 9: \n Bedtools intersect " + timeStamp() + " \n")
+    
 
     cmd = "bedtools intersect \
         -a {} \
         -b {}/step8.bed \
         -wa \
         -header \
-        > {}/step9.snpir.filtered.vcf".format(infile, outdir, outdir)
+        > {}/step9.snpir.filtered.vcf".format(input_file, outdir, outdir)
     print(cmd)
     subprocess.Popen(cmd, shell=True).communicate()
 
@@ -963,6 +964,9 @@ def make_menu():
     required.add_argument( "-O", metavar = "Output_Directory", dest = "str_out_dir",
                            required = False, help = "Where to put the results from SNPiR.",
                            default = ".")
+
+    required.add_argument( "--keep_indels", action="store_true", dest = "keep_indels",
+                           required = False, help = "If indels should be removed or not. (default = True)")
     #---------------------
     ## Optional arguments
     #---------------------
@@ -971,6 +975,7 @@ def make_menu():
     optional.add_argument("--threads", metavar = "Process_threads", dest = "i_number_threads",
                           type = int, default = 1, help = "The number of threads to use for multi-threaded steps.")
     optional.add_argument("--debug", action="store_true", help="sets debug mode for logger")
+
 
     return args_parser
 
@@ -996,6 +1001,7 @@ if __name__ == "__main__":
     refined_bam = args_parsed.str_BAM_file
     refgenome_path = args_parsed.refgenome_path
     threads_num = args_parsed.i_number_threads
+    keep_indels = args_parsed.keep_indels
 
     # Get the output directory and create it if it does not exist
     if not os.path.exists(outdir):
@@ -1008,13 +1014,19 @@ if __name__ == "__main__":
     # if not os.path.exists(checkpoints_dir):
     #     os.makedirs(checkpoints_dir)
 
+    
+    # Start running the steps 
+    if keep_indels == False:
+        filterindels(outdir, infile, refgenome_path)
+        step2_infile = "{}/snp_only.vcf".format(outdir)
+    else:
+        step2_infile = infile
 
-    filterindels(outdir, infile, refgenome_path)
-    step_2(outdir, quality_filter)
+    step_2(outdir, quality_filter, step2_infile)
     step_3(outdir, vadir, refined_bam)
     step_4(outdir, vadir)
     step_5(outdir, vadir)
     step_6(outdir, vadir, refgenome_path)
     step_7(outdir, vadir, threads=threads_num, bamFile = refined_bam, refgenome_path = refgenome_path)
     step_8(outdir, vadir)
-    step_9(outdir, vadir, infile)
+    step_9(outdir, vadir, input_file = step2_infile)
